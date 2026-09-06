@@ -77,6 +77,21 @@ export default {
         return new Response("ok");
       }
 
+      const memoryKey = `chat:${userId}`;
+
+      if (userText === "/clear") {
+        if (env.CHAT_MEMORY) {
+          await env.CHAT_MEMORY.delete(memoryKey);
+        }
+
+        await sendTelegram(
+          telegramApi,
+          chatId,
+          "Память диалога очищена ✅"
+        );
+        return new Response("ok");
+      }
+
       if (userText === "/remind") {
         await sendTelegram(
           telegramApi,
@@ -116,6 +131,16 @@ export default {
       try {
         await sendChatAction(telegramApi, chatId);
 
+        const history = await loadMemory(env, memoryKey);
+
+        const conversation = [
+          ...history,
+          {
+            role: "user",
+            content: userText,
+          },
+        ];
+
         const openaiResponse = await fetch(
           "https://api.openai.com/v1/responses",
           {
@@ -128,7 +153,7 @@ export default {
               model: "gpt-5.6-luna",
               instructions:
                 "Ты личный ИИ-помощник Вячеслава. Отвечай по-русски, понятно, доброжелательно и без лишней воды.",
-              input: userText,
+              input: conversation,
               max_output_tokens: 700,
             }),
           }
@@ -151,6 +176,14 @@ export default {
             ?.flatMap((item) => item.content || [])
             .find((part) => part.type === "output_text")?.text ||
           "Не удалось получить ответ.";
+
+        await saveMemory(env, memoryKey, [
+          ...conversation,
+          {
+            role: "assistant",
+            content: answer,
+          },
+        ]);
 
         await sendTelegram(telegramApi, chatId, answer.slice(0, 4000));
         return new Response("ok");
@@ -185,6 +218,36 @@ export default {
     );
   },
 };
+
+async function loadMemory(env, memoryKey) {
+  if (!env.CHAT_MEMORY) return [];
+
+  try {
+    const history = await env.CHAT_MEMORY.get(memoryKey, "json");
+    return Array.isArray(history) ? history : [];
+  } catch (error) {
+    console.log("Memory read error:", error.message);
+    return [];
+  }
+}
+
+async function saveMemory(env, memoryKey, conversation) {
+  if (!env.CHAT_MEMORY) return;
+
+  try {
+    const recentMessages = conversation.slice(-12);
+
+    await env.CHAT_MEMORY.put(
+      memoryKey,
+      JSON.stringify(recentMessages),
+      {
+        expirationTtl: 60 * 60 * 24 * 30,
+      }
+    );
+  } catch (error) {
+    console.log("Memory write error:", error.message);
+  }
+}
 
 async function sendTelegram(api, chatId, text) {
   return fetch(`${api}/sendMessage`, {
