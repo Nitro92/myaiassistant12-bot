@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "myaiassistant12-bot",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-06",
+  "workers_dev": true,
+  "triggers": {
+    "crons": ["0 19 * * *"]
+  }
+}
