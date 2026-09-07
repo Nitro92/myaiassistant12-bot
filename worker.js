@@ -92,12 +92,70 @@ export default {
         return new Response("ok");
       }
 
-      if (userText === "/remind") {
+            if (userText?.startsWith("/remind")) {
+        const match = userText.match(
+          /^\/remind\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/s
+        );
+
+        if (!match) {
+          await sendTelegram(
+            telegramApi,
+            chatId,
+            "Используйте формат:\n/remind ГГГГ-ММ-ДД ЧЧ:ММ текст\n\nНапример:\n/remind 2026-09-08 19:00 Оплатить кредит"
+          );
+          return new Response("ok");
+        }
+
+        const [, dateText, timeText, reminderText] = match;
+        const [year, month, day] = dateText.split("-").map(Number);
+        const [hour, minute] = timeText.split(":").map(Number);
+
+        const dateCheck = new Date(
+          Date.UTC(year, month - 1, day, hour, minute)
+        );
+
+        const validDate =
+          dateCheck.getUTCFullYear() === year &&
+          dateCheck.getUTCMonth() === month - 1 &&
+          dateCheck.getUTCDate() === day &&
+          dateCheck.getUTCHours() === hour &&
+          dateCheck.getUTCMinutes() === minute;
+
+        const dueAt = Date.UTC(
+          year,
+          month - 1,
+          day,
+          hour - 3,
+          minute
+        );
+
+        if (!validDate || dueAt <= Date.now()) {
+          await sendTelegram(
+            telegramApi,
+            chatId,
+            "Укажите правильные будущие дату и время по Москве."
+          );
+          return new Response("ok");
+        }
+
+        const reminderKey =
+          `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
+
+        await env.CHAT_MEMORY.put(
+          reminderKey,
+          JSON.stringify({
+            chatId,
+            text: reminderText,
+            dueAt,
+          })
+        );
+
         await sendTelegram(
           telegramApi,
           chatId,
-          "🔔 Тестовое напоминание: пора заниматься автоматизацией!"
+          `Напоминание сохранено ✅\n${dateText} в ${timeText} по Москве\n${reminderText}`
         );
+
         return new Response("ok");
       }
 
