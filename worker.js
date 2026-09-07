@@ -259,24 +259,68 @@ export default {
     return new Response("Not found", { status: 404 });
   },
 
-  async scheduled(event, env, ctx) {
+    async scheduled(event, env, ctx) {
     const telegramToken = env.TELEGRAM_BOT_TOKEN;
     const chatId = env.ALLOWED_USER_ID?.trim();
 
-    if (!telegramToken || !chatId) return;
+    if (!telegramToken) return;
 
-    const telegramApi = `https://api.telegram.org/bot${telegramToken}`;
+    const telegramApi =
+      `https://api.telegram.org/bot${telegramToken}`;
 
-    ctx.waitUntil(
-      sendTelegram(
-        telegramApi,
-        chatId,
-        "🔔 Уже 22:00 — время заниматься автоматизацией!"
-      )
-    );
+    if (event.cron === "0 19 * * *" && chatId) {
+      ctx.waitUntil(
+        sendTelegram(
+          telegramApi,
+          chatId,
+          "🔔 Уже 22:00 — время заниматься автоматизацией!"
+        )
+      );
+      return;
+    }
+
+    if (event.cron === "* * * * *") {
+      ctx.waitUntil(processDueReminders(env, telegramApi));
+    }
   },
 };
+async function processDueReminders(env, telegramApi) {
+  if (!env.CHAT_MEMORY) return;
 
+  let cursor;
+
+  do {
+    const page = await env.CHAT_MEMORY.list({
+      prefix: "reminder:",
+      cursor,
+    });
+
+    for (const key of page.keys) {
+      const reminder = await env.CHAT_MEMORY.get(
+        key.name,
+        "json"
+      );
+
+      if (!reminder || reminder.dueAt > Date.now()) {
+        continue;
+      }
+
+      const response = await sendTelegram(
+        telegramApi,
+        reminder.chatId,
+        `🔔 Напоминание\n${reminder.text}`
+      );
+
+      if (response.ok) {
+        await env.CHAT_MEMORY.delete(key.name);
+      }
+    }
+
+    cursor = page.list_complete
+      ? undefined
+      : page.cursor;
+  } while (cursor);
+}
 async function loadMemory(env, memoryKey) {
   if (!env.CHAT_MEMORY) return [];
 
