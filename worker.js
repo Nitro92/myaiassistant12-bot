@@ -217,9 +217,38 @@ if (userText?.startsWith("/forget ")) {
   );
   return new Response("ok");
 }
+let reminderInput = userText;
 
-if (userText?.startsWith("/remind")) {
-        const match = userText.match(
+const naturalReminderMatch = userText?.match(
+  /^напомни\s+(сегодня|завтра)\s+в\s+(\d{1,2}):(\d{2})\s+(.+)$/i
+);
+
+if (naturalReminderMatch) {
+  const [, dayWord, hourText, minuteText, reminderText] =
+    naturalReminderMatch;
+
+  const moscowDate = new Date(
+    Date.now() + 3 * 60 * 60 * 1000
+  );
+
+  if (dayWord.toLowerCase() === "завтра") {
+    moscowDate.setUTCDate(moscowDate.getUTCDate() + 1);
+  }
+
+  const dateText = [
+    moscowDate.getUTCFullYear(),
+    String(moscowDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(moscowDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+
+  const timeText =
+    `${String(hourText).padStart(2, "0")}:${minuteText}`;
+
+  reminderInput =
+    `/remind ${dateText} ${timeText} ${reminderText}`;
+}
+if (reminderInput?.startsWith("/remind")) {
+  const match = reminderInput.match(
           /^\/remind\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/s
         );
 
