@@ -78,6 +78,7 @@ export default {
       }
 
       const memoryKey = `chat:${userId}`;
+      const factsKey = `facts:${userId}`;
 
       if (userText === "/clear") {
         if (env.CHAT_MEMORY) {
@@ -91,8 +92,48 @@ export default {
         );
         return new Response("ok");
       }
+if (userText?.startsWith("/remember ")) {
+  const fact = userText.slice("/remember ".length).trim();
 
-            if (userText?.startsWith("/remind")) {
+  const savedFacts = env.CHAT_MEMORY
+    ? await env.CHAT_MEMORY.get(factsKey, "json")
+    : [];
+
+  const facts = Array.isArray(savedFacts) ? savedFacts : [];
+  facts.push(fact);
+
+  if (env.CHAT_MEMORY) {
+    await env.CHAT_MEMORY.put(
+      factsKey,
+      JSON.stringify(facts.slice(-50))
+    );
+  }
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `Запомнил ✅\n${fact}`
+  );
+  return new Response("ok");
+}
+            if (userText === "/memory") {
+  const savedFacts = env.CHAT_MEMORY
+    ? await env.CHAT_MEMORY.get(factsKey, "json")
+    : [];
+
+  const facts = Array.isArray(savedFacts) ? savedFacts : [];
+  const memoryText = facts.length
+    ? `Я помню:\n${facts.map((fact) => `• ${fact}`).join("\n")}`
+    : "Постоянная память пока пуста.";
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    memoryText
+  );
+  return new Response("ok");
+}
+if (userText?.startsWith("/remind")) {
         const match = userText.match(
           /^\/remind\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/s
         );
@@ -190,9 +231,21 @@ export default {
         await sendChatAction(telegramApi, chatId);
 
         const history = await loadMemory(env, memoryKey);
+        const savedFacts = env.CHAT_MEMORY
+  ? await env.CHAT_MEMORY.get(factsKey, "json")
+  : [];
+const facts = Array.isArray(savedFacts) ? savedFacts : [];
 
         const conversation = [
-          ...history,
+          ...(facts.length
+  ? [{
+      role: "developer",
+      content: `Постоянные факты о пользователе:\n${facts
+        .map((fact) => `• ${fact}`)
+        .join("\n")}`,
+    }]
+  : []),
+...history,
           {
             role: "user",
             content: userText,
