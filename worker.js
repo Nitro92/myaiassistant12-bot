@@ -79,7 +79,36 @@ export default {
 
       const memoryKey = `chat:${userId}`;
       const factsKey = `facts:${userId}`;
+const autoMemoryPatterns = [
+  /^меня зовут\b/i,
+  /^я живу\b/i,
+  /^моя цель\b/i,
+  /^я работаю\b/i,
+  /^я изучаю\b/i,
+  /^мне нравится\b/i,
+  /^я предпочитаю\b/i,
+  /^обычно я\b/i,
+  /^мой любимый\b/i,
+  /^для меня важно\b/i,
+];
 
+if (
+  env.CHAT_MEMORY &&
+  userText &&
+  !userText.startsWith("/") &&
+  autoMemoryPatterns.some((pattern) => pattern.test(userText))
+) {
+  const savedFacts = await env.CHAT_MEMORY.get(factsKey, "json");
+  const facts = Array.isArray(savedFacts) ? savedFacts : [];
+
+  if (!facts.includes(userText)) {
+    facts.push(userText);
+    await env.CHAT_MEMORY.put(
+      factsKey,
+      JSON.stringify(facts.slice(-50))
+    );
+  }
+}
       if (userText === "/clear") {
         if (env.CHAT_MEMORY) {
           await env.CHAT_MEMORY.delete(memoryKey);
