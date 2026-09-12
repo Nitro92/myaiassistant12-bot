@@ -133,6 +133,19 @@ if (userText?.startsWith("/remember ")) {
   );
   return new Response("ok");
 }
+if (userText === "/forget") {
+  if (env.CHAT_MEMORY) {
+    await env.CHAT_MEMORY.delete(factsKey);
+  }
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    "Постоянная память очищена ✅"
+  );
+  return new Response("ok");
+}
+
 if (userText?.startsWith("/remind")) {
         const match = userText.match(
           /^\/remind\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/s
