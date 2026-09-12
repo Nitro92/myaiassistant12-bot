@@ -220,7 +220,7 @@ if (userText?.startsWith("/forget ")) {
 let reminderInput = userText;
 
 const naturalReminderMatch = userText?.match(
-  /^напомни\s+(сегодня|завтра)\s+в\s+(\d{1,2}):(\d{2})\s+(.+)$/i
+  /^напомни(?:\s+мне)?\s+(сегодня|завтра)\s+в\s+(\d{1,2}):(\d{2})\s+(.+)$/i
 );
 
 if (naturalReminderMatch) {
