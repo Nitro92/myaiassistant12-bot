@@ -152,7 +152,7 @@ if (userText?.startsWith("/remember ")) {
 
   const facts = Array.isArray(savedFacts) ? savedFacts : [];
   const memoryText = facts.length
-    ? `Я помню:\n${facts.map((fact) => `• ${fact}`).join("\n")}`
+    ? `Я помню:\n${facts.map((fact, index) => `${index + 1}. ${fact}`).join("\n")}`
     : "Постоянная память пока пуста.";
 
   await sendTelegram(
@@ -162,7 +162,50 @@ if (userText?.startsWith("/remember ")) {
   );
   return new Response("ok");
 }
-if (userText === "/forget") {
+if (userText?.startsWith("/forget ")) {
+  const factNumber = Number(
+    userText.slice("/forget ".length).trim()
+  );
+
+  const savedFacts = env.CHAT_MEMORY
+    ? await env.CHAT_MEMORY.get(factsKey, "json")
+    : [];
+
+  const facts = Array.isArray(savedFacts) ? savedFacts : [];
+  const factIndex = factNumber - 1;
+
+  if (
+    !Number.isInteger(factNumber) ||
+    factIndex < 0 ||
+    factIndex >= facts.length
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Укажите номер факта из команды /memory.\nНапример: /forget 3"
+    );
+    return new Response("ok");
+  }
+
+  const [deletedFact] = facts.splice(factIndex, 1);
+
+  if (facts.length) {
+    await env.CHAT_MEMORY.put(
+      factsKey,
+      JSON.stringify(facts)
+    );
+  } else {
+    await env.CHAT_MEMORY.delete(factsKey);
+  }
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `Удалено из памяти ✅\n${deletedFact}`
+  );
+  return new Response("ok");
+}
+      if (userText === "/forget") {
   if (env.CHAT_MEMORY) {
     await env.CHAT_MEMORY.delete(factsKey);
   }
