@@ -216,6 +216,47 @@ if (userText?.startsWith("/forget ")) {
     "Постоянная память очищена ✅"
   );
   return new Response("ok");
+}if (userText === "/reminders") {
+  const reminderList = await env.CHAT_MEMORY.list({
+    prefix: `reminder:${userId}:`,
+  });
+
+  const reminders = (
+    await Promise.all(
+      reminderList.keys.map(async ({ name }) => {
+        const reminder = await env.CHAT_MEMORY.get(name, "json");
+        return reminder ? { key: name, ...reminder } : null;
+      })
+    )
+  )
+    .filter((reminder) => reminder && reminder.dueAt > Date.now())
+    .sort((a, b) => a.dueAt - b.dueAt);
+
+  const remindersText = reminders.length
+    ? `Будущие напоминания:\n\n${reminders
+        .map((reminder, index) => {
+          const date = new Date(reminder.dueAt).toLocaleString("ru-RU", {
+            timeZone: "Europe/Moscow",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+
+          return `${index + 1}. ${date}\n${reminder.text}`;
+        })
+        .join("\n\n")}`
+    : "Будущих напоминаний пока нет.";
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    remindersText
+  );
+
+  return new Response("ok");
 }
 let reminderInput = userText;
 
