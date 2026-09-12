@@ -279,7 +279,7 @@ export default {
       return;
     }
 
-    if (event.cron === "* * * * *") {
+    if (event.cron === "*/5 * * * *") {
       ctx.waitUntil(processDueReminders(env, telegramApi));
     }
   },
