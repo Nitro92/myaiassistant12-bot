@@ -536,15 +536,38 @@ const facts = Array.isArray(savedFacts) ? savedFacts : [];
       `https://api.telegram.org/bot${telegramToken}`;
 
     if (event.cron === "0 19 * * *" && chatId) {
-      ctx.waitUntil(
-        sendTelegram(
-          telegramApi,
-          chatId,
-          "🔔 Уже 22:00 — время заниматься автоматизацией!"
-        )
+  const moscowDate = new Date(
+    event.scheduledTime + 3 * 60 * 60 * 1000
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const dailyReminderKey =
+    `daily-automation-reminder:${moscowDate}`;
+
+  ctx.waitUntil(
+    (async () => {
+      const alreadySent =
+        await env.CHAT_MEMORY.get(dailyReminderKey);
+
+      if (alreadySent) return;
+
+      await env.CHAT_MEMORY.put(
+        dailyReminderKey,
+        "sent",
+        { expirationTtl: 172800 }
       );
-      return;
-    }
+
+      await sendTelegram(
+        telegramApi,
+        chatId,
+        "🔔 Уже 22:00 — время заниматься автоматизацией!"
+      );
+    })()
+  );
+
+  return;
+}
 
     if (event.cron === "*/5 * * * *") {
       ctx.waitUntil(processDueReminders(env, telegramApi));
