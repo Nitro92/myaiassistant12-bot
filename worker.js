@@ -423,6 +423,33 @@ if (reminderInput?.startsWith("/remind")) {
         return new Response("ok");
       }
 
+      if (userText === "/help") {
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    [
+      "🤖 Команды помощника:",
+      "",
+      "/start — запустить бота",
+      "/help — показать команды",
+      "/id — показать Telegram ID",
+      "/clear — очистить историю диалога",
+      "/remember текст — сохранить факт",
+      "/memory — показать сохранённые факты",
+      "/forget N — удалить факт по номеру",
+      "/forget — удалить все факты",
+      "/remind YYYY-MM-DD HH:MM текст — создать напоминание",
+      "/reminders — показать будущие напоминания",
+      "/cancel N — отменить напоминание",
+      "",
+      "Можно написать обычной фразой:",
+      "Напомни мне завтра в 12:00 позвонить",
+    ].join("\n")
+  );
+
+  return new Response("ok");
+}
+
       if (!userText) {
         await sendTelegram(
           telegramApi,
