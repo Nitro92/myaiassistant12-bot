@@ -318,7 +318,41 @@ if (userText?.startsWith("/forget ")) {
   return new Response("ok");
 }
 let reminderInput = userText;
+const relativeReminderMatch = userText?.match(
+  /^напомни(?:\s+мне)?\s+через\s+(\d+|час)\s*(минуту|минуты|минут|час|часа|часов)?\s+(.+)$/i
+);
 
+if (relativeReminderMatch) {
+  const [, amountText, unitText, reminderText] =
+    relativeReminderMatch;
+
+  const isHours =
+    amountText.toLowerCase() === "час" ||
+    unitText?.startsWith("час");
+
+  const amount =
+    amountText.toLowerCase() === "час"
+      ? 1
+      : Number(amountText);
+
+  const delayMs =
+    amount * (isHours ? 60 * 60 * 1000 : 60 * 1000);
+
+  const moscowDate = new Date(
+    Date.now() + delayMs + 3 * 60 * 60 * 1000
+  );
+
+  const dateText = moscowDate
+    .toISOString()
+    .slice(0, 10);
+
+  const timeText = moscowDate
+    .toISOString()
+    .slice(11, 16);
+
+  reminderInput =
+    `/remind ${dateText} ${timeText} ${reminderText}`;
+}
 const naturalReminderMatch = userText?.match(
   /^напомни(?:\s+мне)?\s+(сегодня|завтра)\s+в\s+(\d{1,2}):(\d{2})\s+(.+)$/i
 );
