@@ -216,7 +216,66 @@ if (userText?.startsWith("/forget ")) {
     "Постоянная память очищена ✅"
   );
   return new Response("ok");
-}if (userText === "/reminders") {
+}
+  if (userText === "/cancel" || userText?.startsWith("/cancel ")) {
+  const reminderNumber = Number(
+    userText.slice("/cancel".length).trim()
+  );
+
+  const reminderList = await env.CHAT_MEMORY.list({
+    prefix: `reminder:${userId}:`,
+  });
+
+  const reminders = (
+    await Promise.all(
+      reminderList.keys.map(async ({ name }) => {
+        const reminder = await env.CHAT_MEMORY.get(name, "json");
+        return reminder ? { key: name, ...reminder } : null;
+      })
+    )
+  )
+    .filter((reminder) => reminder && reminder.dueAt > Date.now())
+    .sort((a, b) => a.dueAt - b.dueAt);
+
+  const reminderIndex = reminderNumber - 1;
+
+  if (
+    !Number.isInteger(reminderNumber) ||
+    reminderIndex < 0 ||
+    reminderIndex >= reminders.length
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Укажите номер напоминания из команды /reminders.\nНапример: /cancel 1"
+    );
+
+    return new Response("ok");
+  }
+
+  const reminder = reminders[reminderIndex];
+
+  await env.CHAT_MEMORY.delete(reminder.key);
+
+  const date = new Date(reminder.dueAt).toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `Напоминание отменено ✅\n${date}\n${reminder.text}`
+  );
+
+  return new Response("ok");
+}    
+      if (userText === "/reminders") {
   const reminderList = await env.CHAT_MEMORY.list({
     prefix: `reminder:${userId}:`,
   });
