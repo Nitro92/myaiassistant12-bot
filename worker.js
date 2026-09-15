@@ -353,6 +353,61 @@ if (relativeReminderMatch) {
   reminderInput =
     `/remind ${dateText} ${timeText} ${reminderText}`;
 }
+const weekdayReminderMatch = userText?.match(
+  /^напомни(?:\s+мне)?\s+в\s+(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\s+в\s+([01]?\d|2[0-3]):([0-5]\d)\s+(.+)$/i
+);
+
+if (weekdayReminderMatch) {
+  const [, weekdayText, hourText, minuteText, reminderText] =
+    weekdayReminderMatch;
+
+  const weekdayNumbers = {
+    "воскресенье": 0,
+    "понедельник": 1,
+    "вторник": 2,
+    "среду": 3,
+    "четверг": 4,
+    "пятницу": 5,
+    "субботу": 6,
+  };
+
+  const moscowDate = new Date(
+    Date.now() + 3 * 60 * 60 * 1000
+  );
+
+  const targetDay =
+    weekdayNumbers[weekdayText.toLowerCase()];
+
+  let daysAhead =
+    (targetDay - moscowDate.getUTCDay() + 7) % 7;
+
+  const targetMinutes =
+    Number(hourText) * 60 + Number(minuteText);
+
+  const currentMinutes =
+    moscowDate.getUTCHours() * 60 +
+    moscowDate.getUTCMinutes();
+
+  if (daysAhead === 0 && targetMinutes <= currentMinutes) {
+    daysAhead = 7;
+  }
+
+  moscowDate.setUTCDate(
+    moscowDate.getUTCDate() + daysAhead
+  );
+
+  const dateText = [
+    moscowDate.getUTCFullYear(),
+    String(moscowDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(moscowDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+
+  const timeText =
+    `${String(hourText).padStart(2, "0")}:${minuteText}`;
+
+  reminderInput =
+    `/remind ${dateText} ${timeText} ${reminderText}`;
+}      
 const naturalReminderMatch = userText?.match(
   /^напомни(?:\s+мне)?\s+(сегодня|завтра)\s+в\s+(\d{1,2}):(\d{2})\s+(.+)$/i
 );
