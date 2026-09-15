@@ -595,7 +595,7 @@ const facts = Array.isArray(savedFacts) ? savedFacts : [];
             body: JSON.stringify({
               model: "gpt-5.6-luna",
               instructions:
-                "Ты личный ИИ-помощник Вячеслава. Отвечай по-русски, понятно, доброжелательно и без лишней воды.",
+                "Ты личный ИИ-помощник Вячеслава. Отвечай по-русски, понятно, доброжелательно и без лишней воды.  Не используй Markdown. Пиши обычным текстом без решёток и звёздочек.",
               input: conversation,
               max_output_tokens: 700,
             }),
