@@ -303,8 +303,8 @@ if (userText?.startsWith("/forget ")) {
             minute: "2-digit",
             hour12: false,
           });
-
-          return `${index + 1}. ${date}\n${reminder.text}`;
+const repeatText = reminder.repeat === "weekly" ? " (еженедельно)" : "";
+          return `${index + 1}. ${date}${repeatText}\n${reminder.text}`;
         })
         .join("\n\n")}`
     : "Будущих напоминаний пока нет.";
