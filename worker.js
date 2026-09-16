@@ -318,6 +318,8 @@ if (userText?.startsWith("/forget ")) {
   return new Response("ok");
 }
 let reminderInput = userText;
+let reminderRepeat = null;
+      
 const relativeReminderMatch = userText?.match(
   /^напомни(?:\s+мне)?\s+через\s+(\d+|час)\s*(минуту|минуты|минут|час|часа|часов)?\s+(.+)$/i
 );
@@ -353,7 +355,21 @@ if (relativeReminderMatch) {
   reminderInput =
     `/remind ${dateText} ${timeText} ${reminderText}`;
 }
-const weekdayReminderMatch = userText?.match(
+const weeklyReminderMatch = userText?.match(
+  /^напоминай(?:\s+мне)?\s+каждый\s+(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\s+в\s+([01]?\d|2[0-3]):([0-5]\d)\s+(.+)$/i
+);
+let weekdayReminderText = userText;
+
+if (weeklyReminderMatch) {
+  const [, weekdayText, hourText, minuteText, reminderText] =
+    weeklyReminderMatch;
+
+  weekdayReminderText =
+    `Напомни мне в ${weekdayText} в ${hourText}:${minuteText} ${reminderText}`;
+
+  reminderRepeat = "weekly";
+}      
+const weekdayReminderMatch = weekdayReminderText?.match(
   /^напомни(?:\s+мне)?\s+в\s+(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\s+в\s+([01]?\d|2[0-3]):([0-5]\d)\s+(.+)$/i
 );
 
@@ -491,6 +507,7 @@ if (reminderInput?.startsWith("/remind")) {
             chatId,
             text: reminderText,
             dueAt,
+            repeat: reminderRepeat,
           })
         );
 
@@ -718,10 +735,22 @@ async function processDueReminders(env, telegramApi) {
         reminder.chatId,
         `🔔 Напоминание\n${reminder.text}`
       );
+        if (response.ok) {
+  if (reminder.repeat === "weekly") {
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
 
-      if (response.ok) {
-        await env.CHAT_MEMORY.delete(key.name);
-      }
+    do {
+      reminder.dueAt += weekMs;
+    } while (reminder.dueAt <= Date.now());
+
+    await env.CHAT_MEMORY.put(
+      key.name,
+      JSON.stringify(reminder)
+    );
+  } else {
+    await env.CHAT_MEMORY.delete(key.name);
+  }
+}
     }
 
     cursor = page.list_complete
