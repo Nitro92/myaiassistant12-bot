@@ -53,7 +53,8 @@ export default {
       const message = update.message;
       const chatId = message?.chat?.id;
       const userId = message?.from?.id;
-      const userText = message?.text?.trim();
+      let userText = message?.text?.trim();
+      const voiceFileId = message?.voice?.file_id;
 
       if (!chatId) return new Response("ok");
 
@@ -76,7 +77,14 @@ export default {
         );
         return new Response("ok");
       }
-
+if (voiceFileId) {
+  userText = await transcribeTelegramVoice(
+    telegramApi,
+    telegramToken,
+    openaiKey,
+    voiceFileId
+  );
+}
       const memoryKey = `chat:${userId}`;
       const factsKey = `facts:${userId}`;
 const autoMemoryPatterns = [
@@ -788,7 +796,61 @@ async function saveMemory(env, memoryKey, conversation) {
     console.log("Memory write error:", error.message);
   }
 }
+async function transcribeTelegramVoice(
+  telegramApi,
+  telegramToken,
+  openaiKey,
+  voiceFileId
+) {
+  if (!openaiKey) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
 
+  const fileInfoResponse = await fetch(
+    `${telegramApi}/getFile?file_id=${encodeURIComponent(voiceFileId)}`
+  );
+  const fileInfo = await fileInfoResponse.json();
+
+  if (!fileInfoResponse.ok || !fileInfo.ok || !fileInfo.result?.file_path) {
+    throw new Error("Telegram getFile failed");
+  }
+
+  const audioResponse = await fetch(
+    `https://api.telegram.org/file/bot${telegramToken}/${fileInfo.result.file_path}`
+  );
+
+  if (!audioResponse.ok) {
+    throw new Error("Telegram audio download failed");
+  }
+
+  const audioBlob = await audioResponse.blob();
+  const formData = new FormData();
+
+  formData.append("model", "gpt-4o-mini-transcribe");
+  formData.append("language", "ru");
+  formData.append("file", audioBlob, "voice.ogg");
+
+  const transcriptionResponse = await fetch(
+    "https://api.openai.com/v1/audio/transcriptions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+      },
+      body: formData,
+    }
+  );
+
+  const transcription = await transcriptionResponse.json();
+
+  if (!transcriptionResponse.ok || !transcription.text?.trim()) {
+    throw new Error(
+      transcription.error?.message || "OpenAI transcription failed"
+    );
+  }
+
+  return transcription.text.trim();
+}
 async function sendTelegram(api, chatId, text) {
   return fetch(`${api}/sendMessage`, {
     method: "POST",
