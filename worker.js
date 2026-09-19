@@ -554,7 +554,17 @@ if (naturalReminderMatch) {
         if (dueAt <= Date.now()) {
           dueAt += 7 * 24 * 60 * 60 * 1000;
         }
+const duplicateExists = await hasDuplicateReminder(
+  env,
+  userId,
+  dueAt,
+  parsedReminder.text,
+  "weekly"
+);
 
+if (duplicateExists) {
+  continue;
+}
         const reminderKey =
           `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
 
@@ -570,7 +580,15 @@ if (naturalReminderMatch) {
 
         savedDays.push(weekdayNames[weekday]);
       }
+if (savedDays.length === 0) {
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    "Такое напоминание уже существует ✅"
+  );
 
+  return new Response("ok");
+}
       await sendTelegram(
         telegramApi,
         chatId,
@@ -662,7 +680,23 @@ if (reminderInput?.startsWith("/remind")) {
           );
           return new Response("ok");
         }
+const duplicateExists = await hasDuplicateReminder(
+  env,
+  userId,
+  dueAt,
+  reminderText,
+  reminderRepeat
+);
 
+if (duplicateExists) {
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    "Такое напоминание уже существует ✅"
+  );
+
+  return new Response("ok");
+}
         const reminderKey =
           `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
 
@@ -1027,7 +1061,76 @@ async function sendChatAction(api, chatId) {
   });
 }
 
+async function hasDuplicateReminder(
+  env,
+  userId,
+  dueAt,
+  text,
+  repeat
+) {
+  const normalizedText = String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
+  const targetDate = new Date(
+    Number(dueAt) + 3 * 60 * 60 * 1000
+  );
+
+  let cursor;
+
+  do {
+    const page = await env.CHAT_MEMORY.list({
+      prefix: `reminder:${userId}:`,
+      cursor,
+    });
+
+    for (const { name } of page.keys) {
+      const reminder = await env.CHAT_MEMORY.get(name, "json");
+
+      if (!reminder) continue;
+
+      const savedText = String(reminder.text)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+      const sameRepeat =
+        (reminder.repeat || null) === (repeat || null);
+
+      let sameSchedule =
+        Number(reminder.dueAt) === Number(dueAt);
+
+      if (
+        repeat === "weekly" &&
+        reminder.repeat === "weekly"
+      ) {
+        const savedDate = new Date(
+          Number(reminder.dueAt) + 3 * 60 * 60 * 1000
+        );
+
+        sameSchedule =
+          savedDate.getUTCDay() === targetDate.getUTCDay() &&
+          savedDate.getUTCHours() === targetDate.getUTCHours() &&
+          savedDate.getUTCMinutes() === targetDate.getUTCMinutes();
+      }
+
+      if (
+        savedText === normalizedText &&
+        sameRepeat &&
+        sameSchedule
+      ) {
+        return true;
+      }
+    }
+
+    cursor = page.list_complete
+      ? undefined
+      : page.cursor;
+  } while (cursor);
+
+  return false;
+}
 async function parseReminderWithAI(openaiKey, userText) {
   const moscowNow = new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
