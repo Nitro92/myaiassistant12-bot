@@ -460,6 +460,163 @@ if (naturalReminderMatch) {
   reminderInput =
     `/remind ${dateText} ${timeText} ${reminderText}`;
 }
+      if (
+  !reminderInput?.startsWith("/remind") &&
+  /напом|не забуд/i.test(userText)
+) {
+  try {
+    const parsedReminder = await parseReminderWithAI(
+      openaiKey,
+      userText
+    );
+
+    if (parsedReminder.intent === "clarify") {
+      await sendTelegram(
+        telegramApi,
+        chatId,
+        parsedReminder.question ||
+          "Уточни, пожалуйста, дату или время напоминания."
+      );
+
+      return new Response("ok");
+    }
+
+    if (
+      parsedReminder.intent === "reminder" &&
+      parsedReminder.repeat === "weekly"
+    ) {
+      const weekdays = Array.isArray(parsedReminder.weekdays)
+        ? [...new Set(parsedReminder.weekdays)]
+        : [];
+
+      const timeMatch =
+        parsedReminder.time?.match(/^(\d{2}):(\d{2})$/);
+
+      if (
+        !timeMatch ||
+        weekdays.length === 0 ||
+        !parsedReminder.text
+      ) {
+        await sendTelegram(
+          telegramApi,
+          chatId,
+          parsedReminder.question ||
+            "Уточни дни недели, время и текст напоминания."
+        );
+
+        return new Response("ok");
+      }
+
+      const hour = Number(timeMatch[1]);
+      const minute = Number(timeMatch[2]);
+
+      if (
+        hour > 23 ||
+        minute > 59
+      ) {
+        await sendTelegram(
+          telegramApi,
+          chatId,
+          "Укажи правильное время напоминания."
+        );
+
+        return new Response("ok");
+      }
+
+      const moscowNow = new Date(
+        Date.now() + 3 * 60 * 60 * 1000
+      );
+
+      const weekdayNames = [
+        "воскресенье",
+        "понедельник",
+        "вторник",
+        "среда",
+        "четверг",
+        "пятница",
+        "суббота",
+      ];
+
+      const savedDays = [];
+
+      for (const weekday of weekdays) {
+        let daysAhead =
+          (weekday - moscowNow.getUTCDay() + 7) % 7;
+
+        let dueAt = Date.UTC(
+          moscowNow.getUTCFullYear(),
+          moscowNow.getUTCMonth(),
+          moscowNow.getUTCDate() + daysAhead,
+          hour - 3,
+          minute
+        );
+
+        if (dueAt <= Date.now()) {
+          dueAt += 7 * 24 * 60 * 60 * 1000;
+        }
+
+        const reminderKey =
+          `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
+
+        await env.CHAT_MEMORY.put(
+          reminderKey,
+          JSON.stringify({
+            chatId,
+            text: parsedReminder.text,
+            dueAt,
+            repeat: "weekly",
+          })
+        );
+
+        savedDays.push(weekdayNames[weekday]);
+      }
+
+      await sendTelegram(
+        telegramApi,
+        chatId,
+        `Напоминание сохранено ✅\n` +
+          `${savedDays.join(", ")} в ${parsedReminder.time} по Москве\n` +
+          `${parsedReminder.text}`
+      );
+
+      return new Response("ok");
+    }
+
+    if (
+      parsedReminder.intent === "reminder" &&
+      parsedReminder.repeat === "none"
+    ) {
+      if (
+        !parsedReminder.date ||
+        !parsedReminder.time ||
+        !parsedReminder.text
+      ) {
+        await sendTelegram(
+          telegramApi,
+          chatId,
+          parsedReminder.question ||
+            "Уточни дату, время и текст напоминания."
+        );
+
+        return new Response("ok");
+      }
+
+      reminderInput =
+        `/remind ${parsedReminder.date} ` +
+        `${parsedReminder.time} ${parsedReminder.text}`;
+    }
+  } catch (error) {
+    console.error("Reminder AI error:", error);
+
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Не получилось разобрать напоминание. Попробуй сформулировать ещё раз."
+    );
+
+    return new Response("ok");
+  }
+}
 if (reminderInput?.startsWith("/remind")) {
   const match = reminderInput.match(
           /^\/remind\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/s
@@ -868,4 +1025,114 @@ async function sendChatAction(api, chatId) {
       action: "typing",
     }),
   });
+}
+
+
+async function parseReminderWithAI(openaiKey, userText) {
+  const moscowNow = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+
+  const response = await fetch(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.6-luna",
+        instructions:
+          `Разбери русскую фразу как напоминание. ` +
+          `Текущее московское время: ${moscowNow}. ` +
+          `Воскресенье — 0, понедельник — 1, вторник — 2, ` +
+          `среда — 3, четверг — 4, пятница — 5, суббота — 6. ` +
+          `Для неоднозначной фразы выбери intent clarify и задай короткий вопрос. ` +
+          `Не придумывай отсутствующие дату или время.`,
+        input: userText,
+        max_output_tokens: 500,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "reminder_parser",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                intent: {
+                  type: "string",
+                  enum: ["reminder", "clarify", "not_reminder"],
+                },
+                repeat: {
+                  type: "string",
+                  enum: ["none", "weekly"],
+                },
+                date: {
+                  type: "string",
+                  description:
+                    "Дата YYYY-MM-DD для разового напоминания или пустая строка",
+                },
+                time: {
+                  type: "string",
+                  description: "Время HH:MM или пустая строка",
+                },
+                weekdays: {
+                  type: "array",
+                  items: {
+                    type: "integer",
+                    enum: [0, 1, 2, 3, 4, 5, 6],
+                  },
+                },
+                text: {
+                  type: "string",
+                  description: "Что именно нужно напомнить",
+                },
+                question: {
+                  type: "string",
+                  description:
+                    "Уточняющий вопрос или пустая строка",
+                },
+              },
+              required: [
+                "intent",
+                "repeat",
+                "date",
+                "time",
+                "weekdays",
+                "text",
+                "question",
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error?.message || "Reminder AI parsing failed"
+    );
+  }
+
+  const outputText = data.output
+    ?.flatMap((item) => item.content || [])
+    .find((item) => item.type === "output_text")
+    ?.text;
+
+  if (!outputText) {
+    throw new Error("Reminder AI returned no text");
+  }
+
+  return JSON.parse(outputText);
 }
