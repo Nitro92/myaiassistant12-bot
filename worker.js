@@ -565,9 +565,12 @@ const duplicateExists = await hasDuplicateReminder(
 if (duplicateExists) {
   continue;
 }
-        const reminderKey =
-          `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
-
+        const reminderKey = await createReminderKey(
+  userId,
+  dueAt,
+  parsedReminder.text,
+  "weekly"
+);
         await env.CHAT_MEMORY.put(
           reminderKey,
           JSON.stringify({
@@ -697,8 +700,12 @@ if (duplicateExists) {
 
   return new Response("ok");
 }
-        const reminderKey =
-          `reminder:${userId}:${dueAt}:${crypto.randomUUID()}`;
+       const reminderKey = await createReminderKey(
+  userId,
+  dueAt,
+  reminderText,
+  reminderRepeat
+);
 
         await env.CHAT_MEMORY.put(
           reminderKey,
@@ -1060,7 +1067,35 @@ async function sendChatAction(api, chatId) {
     }),
   });
 }
+async function createReminderKey(userId, dueAt, text, repeat) {
+  const normalizedText = String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
+  const moscowDate = new Date(
+    Number(dueAt) + 3 * 60 * 60 * 1000
+  );
+
+  const schedule =
+    repeat === "weekly"
+      ? `${moscowDate.getUTCDay()}:${moscowDate.getUTCHours()}:${moscowDate.getUTCMinutes()}`
+      : String(Number(dueAt));
+
+  const source =
+    `${userId}|${repeat || "none"}|${schedule}|${normalizedText}`;
+
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(source)
+  );
+
+  const hash = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  return `reminder:${userId}:${hash}`;
+}
 async function hasDuplicateReminder(
   env,
   userId,
