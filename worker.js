@@ -740,9 +740,7 @@ if (duplicateExists) {
 
   return new Response("ok");
 }
-        );
-
-        await sendTelegram(
+  await sendTelegram(
           telegramApi,
           chatId,
           `Напоминание сохранено ✅\n${dateText} в ${timeText} по Москве\n${reminderText}`
