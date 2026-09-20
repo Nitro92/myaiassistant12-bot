@@ -283,6 +283,158 @@ if (userText?.startsWith("/forget ")) {
 
   return new Response("ok");
 }    
+      if (userText === "/reschedule" || userText.startsWith("/reschedule ")) {
+  const parts = userText.trim().split(/\s+/);
+  const reminderNumber = Number(parts[1]);
+  const dateText = parts[2];
+  const timeText = parts[3];
+
+  if (
+    parts.length !== 4 ||
+    !Number.isInteger(reminderNumber) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateText || "") ||
+    !/^\d{2}:\d{2}$/.test(timeText || "")
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Укажите номер и новую дату.\nНапример: /reschedule 1 2026-09-22 18:00"
+    );
+
+    return new Response("ok");
+  }
+
+  const newDueAt = Date.parse(`${dateText}T${timeText}:00+03:00`);
+  let validDate = Number.isFinite(newDueAt);
+
+  if (validDate) {
+    const moscowCheck = new Date(
+      newDueAt + 3 * 60 * 60 * 1000
+    ).toISOString();
+
+    validDate =
+      moscowCheck.slice(0, 10) === dateText &&
+      moscowCheck.slice(11, 16) === timeText;
+  }
+
+  if (!validDate || newDueAt <= Date.now()) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Укажите корректную будущую дату и время по Москве."
+    );
+
+    return new Response("ok");
+  }
+
+  const reminderList = await env.CHAT_MEMORY.list({
+    prefix: `reminder:${userId}:`,
+  });
+
+  const reminders = (
+    await Promise.all(
+      reminderList.keys.map(async ({ name }) => {
+        const reminder = await env.CHAT_MEMORY.get(name, "json");
+        return reminder ? { key: name, ...reminder } : null;
+      })
+    )
+  )
+    .filter((reminder) => reminder && reminder.dueAt > Date.now())
+    .sort((a, b) => a.dueAt - b.dueAt);
+
+  const reminderIndex = reminderNumber - 1;
+
+  if (
+    reminderIndex < 0 ||
+    reminderIndex >= reminders.length
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Укажите номер напоминания из команды /reminders."
+    );
+
+    return new Response("ok");
+  }
+
+  const reminder = reminders[reminderIndex];
+
+  if (newDueAt === reminder.dueAt) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "У напоминания уже установлены эти дата и время."
+    );
+
+    return new Response("ok");
+  }
+
+  const repeat = reminder.repeat || "none";
+
+  const newReminderKey = await createReminderKey(
+    userId,
+    newDueAt,
+    reminder.text,
+    repeat
+  );
+
+  if (
+    newReminderKey !== reminder.key &&
+    (await env.CHAT_MEMORY.get(newReminderKey))
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Такое напоминание уже существует ✅"
+    );
+
+    return new Response("ok");
+  }
+
+  try {
+    await env.CHAT_MEMORY.put(
+      newReminderKey,
+      JSON.stringify({
+        chatId,
+        text: reminder.text,
+        dueAt: newDueAt,
+        repeat,
+      })
+    );
+
+    if (newReminderKey !== reminder.key) {
+      await env.CHAT_MEMORY.delete(reminder.key);
+    }
+  } catch (error) {
+    console.error("Reminder reschedule failed:", error);
+
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Не удалось перенести напоминание. Попробуйте ещё раз."
+    );
+
+    return new Response("ok");
+  }
+
+  const date = new Date(newDueAt).toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `Напоминание перенесено ✅\n${date} по Москве\n${reminder.text}`
+  );
+
+  return new Response("ok");
+}
       if (userText === "/reminders") {
   const reminderList = await env.CHAT_MEMORY.list({
     prefix: `reminder:${userId}:`,
