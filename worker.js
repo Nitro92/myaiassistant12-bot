@@ -571,15 +571,27 @@ if (duplicateExists) {
   parsedReminder.text,
   "weekly"
 );
-        await env.CHAT_MEMORY.put(
-          reminderKey,
-          JSON.stringify({
-            chatId,
-            text: parsedReminder.text,
-            dueAt,
-            repeat: "weekly",
-          })
-        );
+       try {
+  await env.CHAT_MEMORY.put(
+    reminderKey,
+    JSON.stringify({
+      chatId,
+      text: parsedReminder.text,
+      dueAt,
+      repeat: "weekly",
+    })
+  );
+} catch (error) {
+  console.error("Weekly reminder save failed:", error);
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    "Не удалось сохранить еженедельное напоминание. Попробуйте ещё раз."
+  );
+
+  return new Response("ok");
+}
 
         savedDays.push(weekdayNames[weekday]);
       }
@@ -707,14 +719,27 @@ if (duplicateExists) {
   reminderRepeat
 );
 
-        await env.CHAT_MEMORY.put(
-          reminderKey,
-          JSON.stringify({
-            chatId,
-            text: reminderText,
-            dueAt,
-            repeat: reminderRepeat,
-          })
+      try {
+  await env.CHAT_MEMORY.put(
+    reminderKey,
+    JSON.stringify({
+      chatId,
+      text: reminderText,
+      dueAt,
+      repeat: reminderRepeat,
+    })
+  );
+} catch (error) {
+  console.error("Reminder save failed:", error);
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    "Не удалось сохранить напоминание. Попробуйте ещё раз."
+  );
+
+  return new Response("ok");
+}
         );
 
         await sendTelegram(
