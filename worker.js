@@ -479,6 +479,23 @@ const repeatText = reminder.repeat === "weekly" ? " (еженедельно)" : 
 }
 let reminderInput = userText;
 let reminderRepeat = null;
+      const pendingReminderKey = `pending-reminder:${userId}`;
+
+const pendingReminder = await env.CHAT_MEMORY.get(
+  pendingReminderKey,
+  "json"
+);
+
+if (
+  pendingReminder?.originalInput &&
+  !userText?.startsWith("/")
+) {
+  reminderInput =
+    `${pendingReminder.originalInput}\n` +
+    `Уточнение пользователя: ${userText}`;
+
+  await env.CHAT_MEMORY.delete(pendingReminderKey);
+}
       
 const relativeReminderMatch = userText?.match(
   /^напомни(?:\s+мне)?\s+через\s+(\d+|час)\s*(минуту|минуты|минут|час|часа|часов)?\s+(.+)$/i
@@ -612,16 +629,38 @@ if (naturalReminderMatch) {
   reminderInput =
     `/remind ${dateText} ${timeText} ${reminderText}`;
 }
-      if (
+if (
   !reminderInput?.startsWith("/remind") &&
-  /напом|не забуд/i.test(userText)
+  (
+    /напом|не забудь/i.test(userText) ||
+    pendingReminder?.originalInput
+  )
 ) {
   try {
     const parsedReminder = await parseReminderWithAI(
       openaiKey,
-      userText
+      reminderInput
     );
 
+    if (parsedReminder.intent === "clarify") {
+      await env.CHAT_MEMORY.put(
+        pendingReminderKey,
+        JSON.stringify({
+          originalInput: reminderInput,
+          createdAt: Date.now(),
+        }),
+        { expirationTtl: 900 }
+      );
+
+      await sendTelegram(
+        telegramApi,
+        chatId,
+        parsedReminder.question ||
+          "Уточни, пожалуйста, дату или время напоминания."
+      );
+
+      return new Response("ok");
+    }
     if (parsedReminder.intent === "clarify") {
       await sendTelegram(
         telegramApi,
@@ -776,6 +815,14 @@ if (savedDays.length === 0) {
         !parsedReminder.time ||
         !parsedReminder.text
       ) {
+        await env.CHAT_MEMORY.put(
+  `pending-reminder:${userId}`,
+  JSON.stringify({
+    originalInput: reminderInput,
+    createdAt: Date.now(),
+  }),
+  { expirationTtl: 900 }
+);
         await sendTelegram(
           telegramApi,
           chatId,
