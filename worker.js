@@ -632,7 +632,8 @@ if (naturalReminderMatch) {
 if (
   !reminderInput?.startsWith("/remind") &&
   (
-    /напом|не забудь/i.test(userText) ||
+    voiceFileId ||
+    /напом|не забудь|уведом/i.test(userText) ||
     pendingReminder?.originalInput
   )
 ) {
