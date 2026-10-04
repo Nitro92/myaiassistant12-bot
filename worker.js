@@ -234,7 +234,7 @@ if (cancelMatch) {
     cancelMatch[1] ||
     cancelMatch[2] ||
     ""
-  ).trim().toLowerCase();
+  ).trim().toLowerCase().replace(/[.,!?]/g, "");
 
   const numberWords = {
     один: 1,
