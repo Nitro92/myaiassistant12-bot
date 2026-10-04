@@ -225,10 +225,45 @@ if (userText?.startsWith("/forget ")) {
   );
   return new Response("ok");
 }
-  if (userText === "/cancel" || userText?.startsWith("/cancel ")) {
-  const reminderNumber = Number(
-    userText.slice("/cancel".length).trim()
-  );
+  const cancelMatch = userText?.match(
+  /^\/cancel(?:\s+(.+))?$|^(?:отмени|удали)\s+(?:напоминание|пункт)?\s*(?:номер|№)?\s*(.+)$/i
+);
+
+if (cancelMatch) {
+  const cancelValue = (
+    cancelMatch[1] ||
+    cancelMatch[2] ||
+    ""
+  ).trim().toLowerCase();
+
+  const numberWords = {
+    один: 1,
+    первое: 1,
+    два: 2,
+    второе: 2,
+    три: 3,
+    третье: 3,
+    четыре: 4,
+    четвертое: 4,
+    четвёртое: 4,
+    пять: 5,
+    пятое: 5,
+    шесть: 6,
+    шестое: 6,
+    семь: 7,
+    седьмое: 7,
+    восемь: 8,
+    восьмое: 8,
+    девять: 9,
+    девятое: 9,
+    десять: 10,
+    десятое: 10
+  };
+
+  const digits = cancelValue.match(/\d+/)?.[0];
+  const reminderNumber = digits
+    ? Number(digits)
+    : numberWords[cancelValue];
 
   const reminderList = await env.CHAT_MEMORY.list({
     prefix: `reminder:${userId}:`,
