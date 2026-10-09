@@ -161,6 +161,80 @@ if (userText === "/profile") {
 
   return new Response("ok");
 }
+      if (userText?.startsWith("/xp")) {
+  const parts = userText.trim().split(/\s+/);
+  const skillKey = parts[1]?.toLowerCase();
+  const amount = Number(parts[2]);
+
+  const allowedSkills = [
+    "english",
+    "automation",
+    "fitness",
+    "voice"
+  ];
+
+  if (
+    !allowedSkills.includes(skillKey) ||
+    !Number.isInteger(amount) ||
+    amount <= 0 ||
+    amount > 1000
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Использование:\n/xp english 20\n/xp automation 50\n/xp fitness 30\n/xp voice 15"
+    );
+
+    return new Response("ok");
+  }
+
+  const profile = await env.CHAT_MEMORY.get(profileKey, "json");
+
+  if (!profile) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Сначала создайте профиль командой /profile"
+    );
+
+    return new Response("ok");
+  }
+
+  const skill = profile.skills[skillKey];
+  const oldLevel = skill.level;
+
+  skill.xp += amount;
+
+  while (skill.xp >= 1000 && skill.level < 100) {
+    skill.xp -= 1000;
+    skill.level += 1;
+  }
+
+  if (skill.level >= 100) {
+    skill.level = 100;
+    skill.xp = 1000;
+  }
+
+  await env.CHAT_MEMORY.put(
+    profileKey,
+    JSON.stringify(profile)
+  );
+
+  const levelMessage =
+    skill.level > oldLevel
+      ? "\n🎉 Новый уровень!"
+      : "";
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `${skill.title} +${amount} XP\n` +
+      `LVL ${skill.level} — ${skill.xp} / 1000 XP` +
+      levelMessage
+  );
+
+  return new Response("ok");
+}
 const autoMemoryPatterns = [
   /^меня зовут/i,
   /^я живу/i,
