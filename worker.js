@@ -87,6 +87,80 @@ if (voiceFileId) {
 }
       const memoryKey = `chat:${userId}`;
       const factsKey = `facts:${userId}`;
+      const profileKey = `life:${userId}:profile`;
+
+if (userText === "/profile") {
+  const defaultProfile = {
+    name: "Вячеслав",
+    skills: {
+      english: {
+        title: "🇬🇧 English",
+        level: 23,
+        xp: 380,
+        status: "A2+",
+        goal: "B1"
+      },
+      automation: {
+        title: "🤖 AI Automation",
+        level: 12,
+        xp: 640,
+        status: "Telegram Bot + API",
+        goal: "Первые коммерческие проекты"
+      },
+      fitness: {
+        title: "🏋️ Fitness",
+        level: 18,
+        xp: 510,
+        status: "Подтягивания: 27",
+        goal: "50 подтягиваний"
+      },
+      voice: {
+        title: "🗣 Дикция / голос",
+        level: 6,
+        xp: 280,
+        status: "Тренировка речи",
+        goal: "Уверенная дикция"
+      }
+    }
+  };
+
+  let profile = await env.CHAT_MEMORY.get(profileKey, "json");
+
+  if (!profile) {
+    profile = defaultProfile;
+    await env.CHAT_MEMORY.put(
+      profileKey,
+      JSON.stringify(profile)
+    );
+  }
+
+  const progressBar = (xp) => {
+    const filled = Math.min(10, Math.floor(xp / 100));
+    return "█".repeat(filled) + "░".repeat(10 - filled);
+  };
+
+  const skills = Object.values(profile.skills);
+
+  const profileText = [
+    `👤 PROFILE — ${profile.name}`,
+    "",
+    ...skills.map((skill) =>
+      `${skill.title}\n` +
+      `LVL ${skill.level}\n` +
+      `${progressBar(skill.xp)} ${skill.xp} / 1000 XP\n` +
+      `Сейчас: ${skill.status}\n` +
+      `Цель: ${skill.goal}`
+    )
+  ].join("\n\n");
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    profileText
+  );
+
+  return new Response("ok");
+}
 const autoMemoryPatterns = [
   /^меня зовут/i,
   /^я живу/i,
