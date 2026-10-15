@@ -219,7 +219,32 @@ if (userText === "/profile") {
     profileKey,
     JSON.stringify(profile)
   );
+const historyKey = `life:${userId}:history`;
 
+const savedHistory = await env.CHAT_MEMORY.get(
+  historyKey,
+  "json"
+);
+
+const history = Array.isArray(savedHistory)
+  ? savedHistory
+  : [];
+
+history.unshift({
+  skill: skillKey,
+  title: skill.title,
+  xp: amount,
+  level: skill.level,
+  reason:
+    parts.slice(3).join(" ").trim() ||
+    "Без описания",
+  createdAt: new Date().toISOString()
+});
+
+await env.CHAT_MEMORY.put(
+  historyKey,
+  JSON.stringify(history.slice(0, 100))
+);
   const levelMessage =
     skill.level > oldLevel
       ? "\n🎉 Новый уровень!"
