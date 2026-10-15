@@ -308,6 +308,83 @@ await env.CHAT_MEMORY.put(
 
   return new Response("ok");
 }
+      if (userText === "/stats") {
+  const historyKey = `life:${userId}:history`;
+
+  const savedHistory = await env.CHAT_MEMORY.get(
+    historyKey,
+    "json"
+  );
+
+  const history = Array.isArray(savedHistory)
+    ? savedHistory
+    : [];
+
+  const moscowOffset = 3 * 60 * 60 * 1000;
+  const now = Date.now();
+  const nowMoscow = new Date(now + moscowOffset);
+
+  const startToday =
+    Date.UTC(
+      nowMoscow.getUTCFullYear(),
+      nowMoscow.getUTCMonth(),
+      nowMoscow.getUTCDate()
+    ) - moscowOffset;
+
+  const startWeek =
+    startToday - 6 * 24 * 60 * 60 * 1000;
+
+  const validHistory = history.filter((item) =>
+    Number.isFinite(Date.parse(item.createdAt))
+  );
+
+  const todayHistory = validHistory.filter(
+    (item) => Date.parse(item.createdAt) >= startToday
+  );
+
+  const weekHistory = validHistory.filter(
+    (item) => Date.parse(item.createdAt) >= startWeek
+  );
+
+  const sumXp = (items) =>
+    items.reduce(
+      (sum, item) => sum + (Number(item.xp) || 0),
+      0
+    );
+
+  const bySkill = weekHistory.reduce((result, item) => {
+    const key = item.skill || item.title;
+
+    if (!result[key]) {
+      result[key] = {
+        title: item.title || key,
+        xp: 0
+      };
+    }
+
+    result[key].xp += Number(item.xp) || 0;
+    return result;
+  }, {});
+
+  const skillText =
+    Object.values(bySkill)
+      .sort((a, b) => b.xp - a.xp)
+      .map((item) => `${item.title}: +${item.xp} XP`)
+      .join("\n") || "Нет начислений.";
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `📊 Статистика XP\n\n` +
+      `Сегодня: +${sumXp(todayHistory)} XP ` +
+      `(${todayHistory.length} действий)\n` +
+      `За 7 дней: +${sumXp(weekHistory)} XP ` +
+      `(${weekHistory.length} действий)\n\n` +
+      `По навыкам за 7 дней:\n${skillText}`
+  );
+
+  return new Response("ok");
+}
 const autoMemoryPatterns = [
   /^меня зовут/i,
   /^я живу/i,
