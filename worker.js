@@ -260,6 +260,54 @@ await env.CHAT_MEMORY.put(
 
   return new Response("ok");
 }
+      if (userText === "/history") {
+  const historyKey = `life:${userId}:history`;
+
+  const history = await env.CHAT_MEMORY.get(
+    historyKey,
+    "json"
+  );
+
+  if (!Array.isArray(history) || history.length === 0) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "История XP пока пуста."
+    );
+
+    return new Response("ok");
+  }
+
+  const formatter = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  const historyText = history
+    .slice(0, 10)
+    .map((item, index) => {
+      const date = formatter.format(
+        new Date(item.createdAt)
+      );
+
+      return (
+        `${index + 1}. ${date} — ${item.title} +${item.xp} XP\n` +
+        `   ${item.reason}`
+      );
+    })
+    .join("\n\n");
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `📊 Последние начисления XP:\n\n${historyText}`
+  );
+
+  return new Response("ok");
+}
 const autoMemoryPatterns = [
   /^меня зовут/i,
   /^я живу/i,
