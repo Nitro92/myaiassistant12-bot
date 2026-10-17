@@ -371,15 +371,23 @@ await env.CHAT_MEMORY.put(
       .sort((a, b) => b.xp - a.xp)
       .map((item) => `${item.title}: +${item.xp} XP`)
       .join("\n") || "Нет начислений.";
+const actionWord = (count) => {
+  const lastTwo = count % 100;
+  const last = count % 10;
 
+  if (lastTwo >= 11 && lastTwo <= 14) return "действий";
+  if (last === 1) return "действие";
+  if (last >= 2 && last <= 4) return "действия";
+  return "действий";
+};
   await sendTelegram(
     telegramApi,
     chatId,
     `📊 Статистика XP\n\n` +
       `Сегодня: +${sumXp(todayHistory)} XP ` +
-      `(${todayHistory.length} действий)\n` +
+      `(${todayHistory.length} ${actionWord(todayHistory.length)})\n` +
       `За 7 дней: +${sumXp(weekHistory)} XP ` +
-      `(${weekHistory.length} действий)\n\n` +
+     `(${weekHistory.length} ${actionWord(weekHistory.length)})\n\n` +
       `По навыкам за 7 дней:\n${skillText}`
   );
 
