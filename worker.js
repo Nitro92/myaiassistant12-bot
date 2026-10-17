@@ -202,6 +202,7 @@ if (userText === "/profile") {
 
   const skill = profile.skills[skillKey];
   const oldLevel = skill.level;
+  const oldXp = skill.xp;
 
   skill.xp += amount;
 
@@ -235,6 +236,8 @@ history.unshift({
   title: skill.title,
   xp: amount,
   level: skill.level,
+  previousLevel: oldLevel,
+  previousXp: oldXp,
   reason:
     parts.slice(3).join(" ").trim() ||
     "Без описания",
@@ -256,6 +259,82 @@ await env.CHAT_MEMORY.put(
     `${skill.title} +${amount} XP\n` +
       `LVL ${skill.level} — ${skill.xp} / 1000 XP` +
       levelMessage
+  );
+
+  return new Response("ok");
+}
+      if (userText === "/undo") {
+  const historyKey = `life:${userId}:history`;
+
+  const history = await env.CHAT_MEMORY.get(
+    historyKey,
+    "json"
+  );
+
+  if (!Array.isArray(history) || history.length === 0) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Нет начислений XP для отмены."
+    );
+
+    return new Response("ok");
+  }
+
+  const lastEntry = history[0];
+
+  const profile = await env.CHAT_MEMORY.get(
+    profileKey,
+    "json"
+  );
+
+  const skill =
+    profile?.skills?.[lastEntry.skill];
+
+  if (!profile || !skill) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Не удалось найти навык для отмены."
+    );
+
+    return new Response("ok");
+  }
+
+  if (
+    !Number.isInteger(lastEntry.previousLevel) ||
+    !Number.isInteger(lastEntry.previousXp)
+  ) {
+    await sendTelegram(
+      telegramApi,
+      chatId,
+      "Это старое начисление нельзя отменить автоматически."
+    );
+
+    return new Response("ok");
+  }
+
+  skill.level = lastEntry.previousLevel;
+  skill.xp = lastEntry.previousXp;
+
+  history.shift();
+
+  await Promise.all([
+    env.CHAT_MEMORY.put(
+      profileKey,
+      JSON.stringify(profile)
+    ),
+    env.CHAT_MEMORY.put(
+      historyKey,
+      JSON.stringify(history)
+    )
+  ]);
+
+  await sendTelegram(
+    telegramApi,
+    chatId,
+    `↩️ Отменено: ${lastEntry.title} +${lastEntry.xp} XP\n` +
+      `Теперь: LVL ${skill.level} — ${skill.xp} / 1000 XP`
   );
 
   return new Response("ok");
