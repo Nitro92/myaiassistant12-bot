@@ -161,11 +161,18 @@ if (userText === "/profile") {
 
   return new Response("ok");
 }
-      if (userText?.startsWith("/xp")) {
+  if (
+  userText?.startsWith("/xp") ||
+  userText?.startsWith("/session")
+) {
   const parts = userText.trim().split(/\s+/);
+  const isSession =
+    parts[0]?.toLowerCase() === "/session";
   const skillKey = parts[1]?.toLowerCase();
-  const amount = Number(parts[2]);
-
+  const value = Number(parts[2]);
+  const amount = isSession
+    ? Math.floor(value / 5)
+    : value;
   const allowedSkills = [
     "english",
     "automation",
@@ -173,16 +180,17 @@ if (userText === "/profile") {
     "voice"
   ];
 
-  if (
-    !allowedSkills.includes(skillKey) ||
-    !Number.isInteger(amount) ||
-    amount <= 0 ||
-    amount > 1000
-  ) {
+if (
+  !allowedSkills.includes(skillKey) ||
+  !Number.isInteger(value) ||
+  value <= 0 ||
+  (isSession && value < 5) ||
+  value > (isSession ? 600 : 1000)
+) {
     await sendTelegram(
       telegramApi,
       chatId,
-      "Использование:\n/xp english 20\n/xp automation 50\n/xp fitness 30\n/xp voice 15"
+      "Использование:\n/session automation 45 Работа над ботом\n/session english 30 Урок\n\nРучное начисление:\n/xp automation 10"
     );
 
     return new Response("ok");
@@ -235,6 +243,8 @@ history.unshift({
   skill: skillKey,
   title: skill.title,
   xp: amount,
+  type: isSession ? "session" : "manual",
+  minutes: isSession ? value : null,
   level: skill.level,
   previousLevel: oldLevel,
   previousXp: oldXp,
@@ -252,11 +262,14 @@ await env.CHAT_MEMORY.put(
     skill.level > oldLevel
       ? "\n🎉 Новый уровень!"
       : "";
+    const gainMessage = isSession
+  ? `⏱ ${skill.title}: ${value} мин → +${amount} XP\n`
+  : `${skill.title} +${amount} XP\n`;
 
   await sendTelegram(
     telegramApi,
     chatId,
-    `${skill.title} +${amount} XP\n` +
+    gainMessage +
       `LVL ${skill.level} — ${skill.xp} / 1000 XP` +
       levelMessage
   );
@@ -371,9 +384,14 @@ await env.CHAT_MEMORY.put(
       const date = formatter.format(
         new Date(item.createdAt)
       );
+      const sessionInfo =
+  item.type === "session" &&
+  Number.isInteger(item.minutes)
+    ? ` (${item.minutes} мин)`
+    : "";
 
       return (
-        `${index + 1}. ${date} — ${item.title} +${item.xp} XP\n` +
+        `${index + 1}. ${date} — ${item.title}${sessionInfo} +${item.xp} XP\n` +
         `   ${item.reason}`
       );
     })
@@ -430,6 +448,12 @@ await env.CHAT_MEMORY.put(
       (sum, item) => sum + (Number(item.xp) || 0),
       0
     );
+        const sumMinutes = (items) =>
+  items.reduce(
+    (sum, item) =>
+      sum + (Number(item.minutes) || 0),
+    0
+  );
 
   const bySkill = weekHistory.reduce((result, item) => {
     const key = item.skill || item.title;
@@ -463,11 +487,13 @@ const actionWord = (count) => {
     telegramApi,
     chatId,
     `📊 Статистика XP\n\n` +
-      `Сегодня: +${sumXp(todayHistory)} XP ` +
-      `(${todayHistory.length} ${actionWord(todayHistory.length)})\n` +
-      `За 7 дней: +${sumXp(weekHistory)} XP ` +
-     `(${weekHistory.length} ${actionWord(weekHistory.length)})\n\n` +
-      `По навыкам за 7 дней:\n${skillText}`
+   `Сегодня: +${sumXp(todayHistory)} XP ` +
+`(${todayHistory.length} ${actionWord(todayHistory.length)})\n` +
+`⏱ Занятия сегодня: ${sumMinutes(todayHistory)} мин\n\n` +
+`За 7 дней: +${sumXp(weekHistory)} XP ` +
+`(${weekHistory.length} ${actionWord(weekHistory.length)})\n` +
+`⏱ Занятия за 7 дней: ${sumMinutes(weekHistory)} мин\n\n` +
+`По навыкам за 7 дней:\n${skillText}`
   );
 
   return new Response("ok");
