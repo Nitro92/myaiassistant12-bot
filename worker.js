@@ -15,6 +15,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/setup") {
+      return new Response("Not found", { status: 404 });
       const webhookData = {
         url: `${url.origin}/telegram`,
         drop_pending_updates: true,
